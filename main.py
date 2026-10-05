@@ -14,6 +14,7 @@ load_dotenv()
 
 # Anthropic Config
 claude_model = os.getenv("CLAUDE_MODEL", "")
+anthropic_base_url = os.getenv("ANTHROPIC_BASE_URL", None)
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
 
 
@@ -24,7 +25,7 @@ assert anthropic_api_key, (
 
 
 async def main():
-    claude_service = Claude(model=claude_model)
+    claude_service = Claude(model=claude_model, base_url=anthropic_base_url)
 
     server_scripts = sys.argv[1:]
     clients = {}

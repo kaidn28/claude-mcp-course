@@ -7,20 +7,18 @@
 	"features": {
 		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
 		"ghcr.io/va-h/devcontainers-features/uv:1": {}
-	}
+	},
+	"containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/usr/local"
+  },
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+  // --inexact: don't uninstall packages the base image already ships
+  "postCreateCommand": "uv sync --frozen --inexact",
 
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "pip3 install --user -r requirements.txt",
-
-	// Configure tool-specific properties.
-	// "customizations": {},
-
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  },
+  "remoteUser": "root"
 }
