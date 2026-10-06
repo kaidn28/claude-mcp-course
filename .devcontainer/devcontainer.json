@@ -5,8 +5,8 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/python:3-3.12-bookworm",
 	"features": {
-		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
-		"ghcr.io/va-h/devcontainers-features/uv:1": {}
+		"ghcr.io/va-h/devcontainers-features/uv:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
 	},
 	"containerEnv": {
     "UV_PROJECT_ENVIRONMENT": "/usr/local"
