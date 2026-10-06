@@ -1,6 +1,8 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.fastmcp.prompts import base
+from mcp.types import SamplingMessage, TextContent
 from pydantic import Field
+import json
 
 mcp = FastMCP("DocumentMCP", log_level="ERROR")
 
@@ -31,6 +33,34 @@ def update_doc(
 
     docs[doc_id] = docs.get(doc_id).replace(old_string, new_string)
     return docs[doc_id]
+
+@mcp.tool(name="search_internet", description="tool to search for random unhelpful information on the internet")
+async def search_internet(ctx: Context):
+    with open("data/synthetic_search_results.json", 'r') as f:
+        search_result = json.loads(f.read())
+
+    prompt = f"""
+    Please summarize the following text:
+    {search_result}
+    """
+
+    summary = await ctx.session.create_message(
+        messages=[
+            SamplingMessage(
+                role="user",
+                content=TextContent(
+                    type="text",
+                    text=prompt
+                )
+            )
+        ],
+        max_tokens=4000,
+        system_prompt="You are a helpful research assistant",
+    )
+    if summary.content.type == "text":
+        return summary.content.text
+    else:
+        raise ValueError("Sampling failed")
 
 @mcp.resource(uri="docs://documents", mime_type="application/json")
 def get_doc_list():

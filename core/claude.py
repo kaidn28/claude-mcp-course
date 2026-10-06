@@ -1,5 +1,8 @@
+import asyncio
 from anthropic import Anthropic
 from anthropic.types import Message
+from mcp.shared.context import RequestContext
+from mcp.types import CreateMessageRequestParams, CreateMessageResult, TextContent
 
 
 class Claude:
@@ -62,3 +65,19 @@ class Claude:
 
         message = self.client.messages.create(**params)
         return message
+        
+    async def sampling_callback(
+        self, ctx: RequestContext, params: CreateMessageRequestParams
+    ):
+        # print(params.messages)
+        messages = [{"role": m.role, "content": m.content.text} for m in params.messages]
+        # Call Claude using the Anthropic SDK
+        
+        callback_result = await asyncio.to_thread(self.chat, messages)
+        
+        text = "".join(b.text for b in callback_result.content if b.type == "text")
+        return CreateMessageResult(
+            role="assistant",
+            model=self.model,
+            content=TextContent(type="text", text=text),
+        )

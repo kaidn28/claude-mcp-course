@@ -6,6 +6,7 @@ from pydantic import AnyUrl
 from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
+from mcp.client.session import SamplingFnT
 
 
 class MCPClient:
@@ -14,12 +15,14 @@ class MCPClient:
         command: str,
         args: list[str],
         env: Optional[dict] = None,
+        sampling_callback: Optional[SamplingFnT] = None
     ):
         self._command = command
         self._args = args
         self._env = env
         self._session: Optional[ClientSession] = None
         self._exit_stack: AsyncExitStack = AsyncExitStack()
+        self._sampling_callback = sampling_callback
 
     async def connect(self):
         server_params = StdioServerParameters(
@@ -32,7 +35,7 @@ class MCPClient:
         )
         _stdio, _write = stdio_transport
         self._session = await self._exit_stack.enter_async_context(
-            ClientSession(_stdio, _write)
+            ClientSession(_stdio, _write, sampling_callback=self._sampling_callback)
         )
         await self._session.initialize()
 
