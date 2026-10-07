@@ -35,7 +35,7 @@ class MCPClient:
         )
         _stdio, _write = stdio_transport
         self._session = await self._exit_stack.enter_async_context(
-            ClientSession(_stdio, _write, sampling_callback=self._sampling_callback)
+            ClientSession(_stdio, _write, sampling_callback=self._sampling_callback, logging_callback=self.logging_callback)
         )
         await self._session.initialize()
 
@@ -46,6 +46,21 @@ class MCPClient:
             )
         return self._session
 
+    @staticmethod
+    async def logging_callback(params: types.LoggingMessageNotificationParams):
+        print(params.data)
+
+    @staticmethod
+    async def print_progress_callback(
+        progress: float, total: float | None, message: str | None
+    ):
+        if total is not None:
+            percentage = (progress / total) * 100
+            print(f"Progress: {progress}/{total} ({percentage:.1f}%)")
+        else:
+            print(f"Progress: {progress}")
+
+
     async def list_tools(self) -> list[types.Tool]:
         _list_tools = await self.session().list_tools()
         return _list_tools.tools
@@ -53,7 +68,7 @@ class MCPClient:
     async def call_tool(
         self, tool_name: str, tool_input: dict
     ) -> types.CallToolResult | None:
-        return await self.session().call_tool(tool_name, tool_input)
+        return await self.session().call_tool(tool_name, tool_input, progress_callback=self.print_progress_callback)
 
     async def list_prompts(self) -> list[types.Prompt]:
         _list_prompts = await self.session().list_prompts()

@@ -36,14 +36,18 @@ def update_doc(
 
 @mcp.tool(name="search_internet", description="tool to search for random unhelpful information on the internet")
 async def search_internet(ctx: Context):
+    await ctx.info("Searching internet...")
+    await ctx.report_progress(0, 100)
     with open("data/synthetic_search_results.json", 'r') as f:
         search_result = json.loads(f.read())
-
+    
+    await ctx.info("Summarizing results...")
+    await ctx.report_progress(80, 100)
     prompt = f"""
     Please summarize the following text:
     {search_result}
     """
-
+    
     summary = await ctx.session.create_message(
         messages=[
             SamplingMessage(
@@ -57,6 +61,9 @@ async def search_internet(ctx: Context):
         max_tokens=4000,
         system_prompt="You are a helpful research assistant",
     )
+
+    ctx.info("Returning final result...")
+    await ctx.report_progress(100, 100)
     if summary.content.type == "text":
         return summary.content.text
     else:
