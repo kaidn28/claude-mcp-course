@@ -1,38 +1,28 @@
 import json
 from typing import Optional, Literal, List
 from mcp.types import CallToolResult, Tool, TextContent
-from mcp_client import MCPClient
+from mcp_client import MCPClientHub
 from anthropic.types import Message, ToolResultBlockParam
+
+from .utils import safe_name
 
 
 class ToolManager:
     @classmethod
-    async def get_all_tools(cls, clients: dict[str, MCPClient]) -> list[Tool]:
+    async def get_all_tools(cls, client_hub: MCPClientHub) -> list[Tool]:
         """Gets all tools from the provided clients."""
         tools = []
-        for client in clients.values():
+        for server, client in client_hub._clients.items():
             tool_models = await client.list_tools()
             tools += [
                 {
-                    "name": t.name,
+                    "name": safe_name(server, t.name),
                     "description": t.description,
                     "input_schema": t.inputSchema,
                 }
                 for t in tool_models
             ]
         return tools
-
-    @classmethod
-    async def _find_client_with_tool(
-        cls, clients: list[MCPClient], tool_name: str
-    ) -> Optional[MCPClient]:
-        """Finds the first client that has the specified tool."""
-        for client in clients:
-            tools = await client.list_tools()
-            tool = next((t for t in tools if t.name == tool_name), None)
-            if tool:
-                return client
-        return None
 
     @classmethod
     def _build_tool_result_part(
@@ -51,7 +41,7 @@ class ToolManager:
 
     @classmethod
     async def execute_tool_requests(
-        cls, clients: dict[str, MCPClient], message: Message
+        cls, client_hub: MCPClientHub, message: Message
     ) -> List[ToolResultBlockParam]:
         """Executes a list of tool requests against the provided clients."""
         tool_requests = [
@@ -63,11 +53,7 @@ class ToolManager:
             tool_name = tool_request.name
             tool_input = tool_request.input
 
-            client = await cls._find_client_with_tool(
-                list(clients.values()), tool_name
-            )
-
-            if not client:
+            if not await client_hub.check_tool_available(tool_name):
                 tool_result_part = cls._build_tool_result_part(
                     tool_use_id, "Could not find that tool", "error"
                 )
@@ -75,7 +61,7 @@ class ToolManager:
                 continue
 
             try:
-                tool_output: CallToolResult | None = await client.call_tool(
+                tool_output: CallToolResult | None = await client_hub.call_tool(
                     tool_name, tool_input
                 )
                 items = []

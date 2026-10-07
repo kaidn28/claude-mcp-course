@@ -4,11 +4,10 @@ import os
 from dotenv import load_dotenv
 from contextlib import AsyncExitStack
 
-from mcp_client import MCPClient
 from core.claude import Claude
-
 from core.cli_chat import CliChat
 from core.cli import CliApp
+from mcp_client import MCPClient, MCPClientHub, StdioConfig, HttpConfig
 
 load_dotenv()
 
@@ -27,38 +26,36 @@ assert anthropic_api_key, (
 async def main():
     claude_service = Claude(model=claude_model, base_url=anthropic_base_url)
 
-    server_scripts = sys.argv[1:]
     clients = {}
 
-    command, args = (
-        ("uv", ["run", "mcp_server.py"])
-        if os.getenv("USE_UV", "0") == "1"
-        else ("python", ["mcp_server.py"])
-    )
+    doc_client_config = StdioConfig("python", ["mcp_server.py"])
+    http_client_config = HttpConfig("http://127.0.0.1:8000/mcp", {})
 
-    async with AsyncExitStack() as stack:
-        doc_client = await stack.enter_async_context(
-            MCPClient(command=command, args=args,
-                      sampling_callback=claude_service.sampling_callback, roots=['./data/'])
-        )
-        clients["doc_client"] = doc_client
+    client_configs = {
+        "doc-client": doc_client_config,
+        "http-client": http_client_config
+    }
 
-        for i, server_script in enumerate(server_scripts):
-            client_id = f"client_{i}_{server_script}"
+    for client_id, cfg in client_configs.items():
+        async with AsyncExitStack() as stack:
             client = await stack.enter_async_context(
-                MCPClient(command="uv", args=["run", server_script])
+                MCPClient(
+                    transport_config=cfg,
+                    sampling_callback=claude_service.sampling_callback,
+                    roots=['./data/'])
             )
             clients[client_id] = client
+    client_hub = MCPClientHub(clients)
+    await client_hub.start()
 
-        chat = CliChat(
-            doc_client=doc_client,
-            clients=clients,
-            claude_service=claude_service,
-        )
+    chat = CliChat(
+        client_hub=client_hub,
+        claude_service=claude_service,
+    )
 
-        cli = CliApp(chat)
-        await cli.initialize()
-        await cli.run()
+    cli = CliApp(chat)
+    await cli.initialize()
+    await cli.run()
 
 
 if __name__ == "__main__":

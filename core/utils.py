@@ -11,3 +11,7 @@ def file_url_to_path(file_url) -> Path:
         path = path[1:]
 
     return Path(path)
+
+
+def safe_name(server: str, name: str) -> str:
+    return f"{server}__{name}"

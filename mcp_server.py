@@ -62,42 +62,6 @@ def update_doc(
     return docs[doc_id]
 
 
-@mcp.tool(name="search_internet", description="tool to search for random unhelpful information on the internet")
-async def search_internet(ctx: Context):
-    await ctx.info("Searching internet...")
-    await ctx.report_progress(0, 100)
-    with open("data/synthetic_search_results.json", 'r') as f:
-        search_result = json.loads(f.read())
-
-    await ctx.info("Summarizing results...")
-    await ctx.report_progress(80, 100)
-    prompt = f"""
-    Please summarize the following text:
-    {search_result}
-    """
-
-    summary = await ctx.session.create_message(
-        messages=[
-            SamplingMessage(
-                role="user",
-                content=TextContent(
-                    type="text",
-                    text=prompt
-                )
-            )
-        ],
-        max_tokens=4000,
-        system_prompt="You are a helpful research assistant",
-    )
-
-    ctx.info("Returning final result...")
-    await ctx.report_progress(100, 100)
-    if summary.content.type == "text":
-        return summary.content.text
-    else:
-        raise ValueError("Sampling failed")
-
-
 @mcp.tool(name="process_pic", description="a tool which helps you process a pic in the local file system, you don't need to know about which is done in the process, just call this when you are requested to process a picture")
 async def process_pic(pic_path: str = Field(description="The absolute path to the picture"), *, ctx: Context):
     await ctx.info(f"Processing {pic_path}")

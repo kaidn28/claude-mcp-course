@@ -1,46 +1,81 @@
-from typing import List, Tuple
-from mcp.types import Prompt, PromptMessage
+from typing import List, Tuple, Any
+from pydantic import AnyUrl
+from mcp.types import Prompt, PromptMessage, Tool
 from anthropic.types import MessageParam
 
-from core.chat import Chat
 from core.claude import Claude
-from mcp_client import MCPClient
+from core.tools import ToolManager
+from mcp_client import MCPClientHub
 
 
-class CliChat(Chat):
+class CliChat:
     def __init__(
         self,
-        doc_client: MCPClient,
-        clients: dict[str, MCPClient],
+        client_hub: MCPClientHub,
         claude_service: Claude,
     ):
-        super().__init__(clients=clients, claude_service=claude_service)
+        self._client_hub = client_hub
+        self._claude_service = claude_service
+        self.messages: list[MessageParam] = []
 
-        self.doc_client: MCPClient = doc_client
+    async def run(
+        self,
+        query: str,
+    ) -> str:
+        final_text_response = ""
+
+        await self._process_query(query)
+
+        while True:
+            response = self._claude_service.chat(
+                messages=self.messages,
+                tools=await ToolManager.get_all_tools(self._client_hub),
+            )
+
+            self._claude_service.add_assistant_message(self.messages, response)
+
+            if response.stop_reason == "tool_use":
+                print(self._claude_service.text_from_message(response))
+                tool_result_parts = await ToolManager.execute_tool_requests(
+                    self._client_hub, response
+                )
+
+                self._claude_service.add_user_message(
+                    self.messages, tool_result_parts
+                )
+            else:
+                final_text_response = self._claude_service.text_from_message(
+                    response
+                )
+                break
+
+        return final_text_response
+
+    async def list_documents(self):
+        doc_client = self._client_hub._clients.get("doc-client")
+        return await doc_client.read_resource(f"docs://documents")
+
+    async def read_document(self, doc_id: str):
+        doc_client = self._client_hub._clients.get("doc-client")
+        return await doc_client.read_resource(f"docs://documents/{doc_id}")
 
     async def list_prompts(self) -> list[Prompt]:
-        return await self.doc_client.list_prompts()
-
-    async def list_docs_ids(self) -> list[str]:
-        return await self.doc_client.read_resource("docs://documents")
-
-    async def get_doc_content(self, doc_id: str) -> str:
-        return await self.doc_client.read_resource(f"docs://documents/{doc_id}")
+        return await self._client_hub.list_prompts()
 
     async def get_prompt(
-        self, command: str, doc_id: str
+        self, command: str, args: dict
     ) -> list[PromptMessage]:
-        return await self.doc_client.get_prompt(command, {"doc_id": doc_id})
+        return await self._client_hub.get_prompt(command, args)
 
     async def _extract_resources(self, query: str) -> str:
         mentions = [word[1:] for word in query.split() if word.startswith("@")]
 
-        doc_ids = await self.list_docs_ids()
+        doc_ids = await self.list_documents()
         mentioned_docs: list[Tuple[str, str]] = []
 
         for doc_id in doc_ids:
             if doc_id in mentions:
-                content = await self.get_doc_content(doc_id)
+                content = await self.read_document(doc_id)
                 mentioned_docs.append((doc_id, content))
 
         return "".join(
@@ -55,7 +90,7 @@ class CliChat(Chat):
         words = query.split()
         command = words[0].replace("/", "")
 
-        messages = await self.doc_client.get_prompt(
+        messages = await self.get_prompt(
             command, {"doc_id": words[1]}
         )
 

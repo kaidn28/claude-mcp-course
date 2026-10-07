@@ -55,7 +55,7 @@ class UnifiedCompleter(Completer):
 
         if "@" in text_before_cursor:
             last_at_pos = text_before_cursor.rfind("@")
-            prefix = text_before_cursor[last_at_pos + 1 :]
+            prefix = text_before_cursor[last_at_pos + 1:]
 
             for resource_id in self.resources:
                 if resource_id.lower().startswith(prefix.lower()):
@@ -182,7 +182,7 @@ class CliApp:
 
     async def refresh_resources(self):
         try:
-            self.resources = await self.agent.list_docs_ids()
+            self.resources = await self.agent.list_documents()
             self.completer.update_resources(self.resources)
         except Exception as e:
             print(f"Error refreshing resources: {e}")
