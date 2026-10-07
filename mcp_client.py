@@ -7,6 +7,9 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from mcp.client.session import SamplingFnT
+from mcp.shared.context import RequestContext
+from pathlib import Path
+from pydantic import FileUrl
 
 
 class MCPClient:
@@ -15,6 +18,7 @@ class MCPClient:
         command: str,
         args: list[str],
         env: Optional[dict] = None,
+        roots: Optional[list[str]] = None,
         sampling_callback: Optional[SamplingFnT] = None
     ):
         self._command = command
@@ -23,6 +27,7 @@ class MCPClient:
         self._session: Optional[ClientSession] = None
         self._exit_stack: AsyncExitStack = AsyncExitStack()
         self._sampling_callback = sampling_callback
+        self._roots = self.create_roots(roots) if roots else []
 
     async def connect(self):
         server_params = StdioServerParameters(
@@ -35,7 +40,8 @@ class MCPClient:
         )
         _stdio, _write = stdio_transport
         self._session = await self._exit_stack.enter_async_context(
-            ClientSession(_stdio, _write, sampling_callback=self._sampling_callback, logging_callback=self.logging_callback)
+            ClientSession(_stdio, _write, sampling_callback=self._sampling_callback,
+                          logging_callback=self.logging_callback, list_roots_callback=self.handle_list_roots)
         )
         await self._session.initialize()
 
@@ -60,6 +66,21 @@ class MCPClient:
         else:
             print(f"Progress: {progress}")
 
+    @staticmethod
+    def create_roots(root_paths: list[str]) -> list[types.Root]:
+        """Convert path strings to Root objects."""
+        roots = []
+        for path in root_paths:
+            p = Path(path).resolve()
+            file_url = FileUrl(f"file://{p}")
+            roots.append(types.Root(uri=file_url, name=p.name or "Root"))
+        return roots
+
+    async def handle_list_roots(
+        self, ctx: RequestContext["ClientSession", None]
+    ) -> types.ListRootsResult | types.ErrorData:
+        """Callback for when server requests roots."""
+        return types.ListRootsResult(roots=self._roots)
 
     async def list_tools(self) -> list[types.Tool]:
         _list_tools = await self.session().list_tools()
@@ -82,12 +103,12 @@ class MCPClient:
         results = await self.session().read_resource(AnyUrl(uri))
         resource = results.contents[0]
         if isinstance(resource, types.TextResourceContents):
-            if resource.mimeType == "application/json": 
+            if resource.mimeType == "application/json":
                 return json.loads(resource.text)
             elif resource.mimeType == "text/plain":
-                return resource.text    
+                return resource.text
         return ValueError(f"{uri} is not a text file")
-    
+
     async def cleanup(self):
         await self._exit_stack.aclose()
         self._session = None

@@ -38,7 +38,8 @@ async def main():
 
     async with AsyncExitStack() as stack:
         doc_client = await stack.enter_async_context(
-            MCPClient(command=command, args=args, sampling_callback=claude_service.sampling_callback)
+            MCPClient(command=command, args=args,
+                      sampling_callback=claude_service.sampling_callback, roots=['./data/'])
         )
         clients["doc_client"] = doc_client
 
